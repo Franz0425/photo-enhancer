@@ -3,62 +3,34 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  try {
-    const { image } = req.body;
-    if (!image) {
-      return res.status(400).json({ error: "No image provided" });
-    }
+  const { image } = req.body;
+  if (!image) {
+    return res.status(400).json({ error: "No image provided" });
+  }
 
-    // 1️⃣ Send image to Replicate API
-    const startResponse = await fetch("https://api.replicate.com/v1/predictions", {
+  // ✅ Load token from Vercel environment
+  const replicateToken = process.env.REPLICATE_API_TOKEN;
+  if (!replicateToken) {
+    return res.status(500).json({ error: "Missing API token" });
+  }
+
+  try {
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
-        "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json",
+        "Authorization": `Token ${replicateToken}`,
       },
       body: JSON.stringify({
-        version: "8e768db6c5fbdccf8a5f1055bce38efef0ebd2f230c9e8b97c48d6b3cc9361b6", // Replace with your Replicate model version
-        input: { image }
+        version: "7de2ea26c616d5bf2245ad0d5d5e5e13cbb14c244a2ec28c58a219d0f3b6ac5a", // Example model version
+        input: { image: image }
       }),
     });
 
-    const startData = await startResponse.json();
-    if (startData.error) {
-      return res.status(500).json({ error: startData.error });
-    }
-
-    const predictionId = startData.id;
-
-    // 2️⃣ Poll Replicate until done
-    let status = startData.status;
-    let output = null;
-    let tries = 0;
-
-    while (status !== "succeeded" && status !== "failed" && tries < 60) {
-      await new Promise(resolve => setTimeout(resolve, 5000)); // wait 5 sec
-      tries++;
-
-      const checkResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-        headers: {
-          "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      const checkData = await checkResponse.json();
-      status = checkData.status;
-      output = checkData.output;
-    }
-
-    if (status === "failed") {
-      return res.status(500).json({ error: "Enhancement failed." });
-    }
-
-    // 3️⃣ Return final image URL
-    return res.status(200).json({ output: output[0] });
-
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Server error" });
+    const data = await response.json();
+    return res.status(200).json(data);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "API request failed" });
   }
 }
