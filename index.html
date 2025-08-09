@@ -1,151 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>4K Photo Enhancer</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: #fff;
-            text-align: center;
-            padding: 20px;
-        }
-        h1 {
-            color: #00ff99;
-        }
-        .upload-box {
-            background: #1e1e1e;
-            border: 2px dashed #00ff99;
-            padding: 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            margin: 20px auto;
-            max-width: 400px;
-        }
-        input[type="file"] {
-            display: none;
-        }
-        button {
-            background: #00ff99;
-            color: black;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 20px;
-        }
-        button:disabled {
-            background: gray;
-            cursor: not-allowed;
-        }
-        img {
-            margin-top: 20px;
-            max-width: 90%;
-            border-radius: 10px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.5);
-        }
-        .loader {
-            display: none;
-            margin-top: 20px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Photo Enhancer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #0d0d0d;
+      color: #ffffff;
+      text-align: center;
+      padding: 40px;
+    }
+    h1 {
+      color: #ffcc00;
+      font-size: 2.2em;
+    }
+    .upload-box {
+      background-color: #1a1a1a;
+      border: 2px dashed #444;
+      padding: 20px;
+      border-radius: 10px;
+      margin: 20px auto;
+      width: 90%;
+      max-width: 400px;
+      cursor: pointer;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    button {
+      background-color: #ffcc00;
+      border: none;
+      color: #000;
+      padding: 12px 24px;
+      font-size: 1em;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    button:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
+    .loading {
+      margin-top: 20px;
+      font-size: 1.1em;
+      color: #aaa;
+    }
+  </style>
 </head>
 <body>
-    <h1>4K Photo Enhancer</h1>
-    <p>Upload your photo and let AI enhance it automatically to 4K quality.</p>
-
-    <label class="upload-box" for="fileInput">
-        <p>Click or Tap to Upload Photo</p>
-    </label>
+  <h1>✨ AI Photo Enhancer</h1>
+  <label class="upload-box" for="fileInput">
+    <p>📤 Click to upload a photo</p>
     <input type="file" id="fileInput" accept="image/*">
-    
-    <button id="uploadBtn" disabled>Enhance Photo</button>
-    
-    <div class="loader" id="loader">Enhancing... Please wait.</div>
-    <img id="resultImage" style="display:none;">
+  </label>
+  <button id="enhanceBtn" disabled>Enhance Photo</button>
+  <p class="loading" id="status"></p>
 
-    <script>
-        const fileInput = document.getElementById('fileInput');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const loader = document.getElementById('loader');
-        const resultImage = document.getElementById('resultImage');
+  <script>
+    const apiKey = "r8_IUEHEc1yTgQgBuP4nJvszMU8nbCDnzM3wPZRI"; // Your Replicate API Key
+    let selectedFile;
 
-        let selectedFile;
+    document.getElementById("fileInput").addEventListener("change", (event) => {
+      selectedFile = event.target.files[0];
+      document.getElementById("enhanceBtn").disabled = !selectedFile;
+    });
 
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length > 0) {
-                selectedFile = fileInput.files[0];
-                uploadBtn.disabled = false;
-            }
+    document.getElementById("enhanceBtn").addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      document.getElementById("status").textContent = "⏳ Uploading and enhancing...";
+      document.getElementById("enhanceBtn").disabled = true;
+
+      try {
+        // Convert image to Base64
+        const base64Image = await fileToBase64(selectedFile);
+
+        // Send request to Replicate API
+        const response = await fetch("https://api.replicate.com/v1/predictions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Token ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            version: "2f5f29d6c8f8998f6e993f0bfe7f5b0dada1fcdbf6fbd50b6be2e6cf9a5f4b04", // Real-ESRGAN 4K model
+            input: { image: base64Image }
+          })
         });
 
-        uploadBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
-            
-            loader.style.display = 'block';
-            uploadBtn.disabled = true;
+        const json = await response.json();
+        if (json.error) throw new Error(json.error);
 
-            const formData = new FormData();
-            formData.append("file", selectedFile);
+        const predictionId = json.id;
 
-            // Step 1: Upload image to Replicate's hosting
-            let uploadResponse = await fetch("https://api.replicate.com/v1/files", {
-                method: "POST",
-                headers: {
-                    "Authorization": "Token r8_IUEHEc1yTgQgBuP4nJvszMU8nbCDnzM3wPZRI"
-                },
-                body: formData
-            });
+        // Poll until done
+        let resultUrl = null;
+        while (!resultUrl) {
+          await new Promise(r => setTimeout(r, 3000));
+          const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+            headers: { "Authorization": `Token ${apiKey}` }
+          });
+          const pollJson = await pollRes.json();
+          if (pollJson.status === "succeeded") {
+            resultUrl = pollJson.output[0];
+          } else if (pollJson.status === "failed") {
+            throw new Error("Enhancement failed");
+          }
+        }
 
-            let uploadData = await uploadResponse.json();
-            let imageUrl = uploadData.urls.get;
+        // Auto download enhanced image
+        const link = document.createElement("a");
+        link.href = resultUrl;
+        link.download = "enhanced-photo.png";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
 
-            // Step 2: Call the model for enhancement
-            let enhanceResponse = await fetch("https://api.replicate.com/v1/predictions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "Token r8_IUEHEc1yTgQgBuP4nJvszMU8nbCDnzM3wPZRI"
-                },
-                body: JSON.stringify({
-                    version: "sczhou/codeformer:latest",
-                    input: {
-                        image: imageUrl,
-                        upscale: 4,
-                        background_enhance: true,
-                        face_upsample: true
-                    }
-                })
-            });
+        document.getElementById("status").textContent = "✅ Done! File downloaded.";
+      } catch (err) {
+        document.getElementById("status").textContent = "❌ Error: " + err.message;
+      }
 
-            let enhanceData = await enhanceResponse.json();
-            let predictionId = enhanceData.id;
+      document.getElementById("enhanceBtn").disabled = false;
+    });
 
-            // Step 3: Poll until enhancement is complete
-            let status;
-            let outputUrl;
-            do {
-                await new Promise(r => setTimeout(r, 3000));
-                let checkResponse = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
-                    headers: {
-                        "Authorization": "Token r8_IUEHEc1yTgQgBuP4nJvszMU8nbCDnzM3wPZRI"
-                    }
-                });
-                let checkData = await checkResponse.json();
-                status = checkData.status;
-                if (status === "succeeded") {
-                    outputUrl = checkData.output[0];
-                }
-            } while (status !== "succeeded");
-
-            loader.style.display = 'none';
-            resultImage.src = outputUrl;
-            resultImage.style.display = 'block';
-            uploadBtn.disabled = false;
-        });
-    </script>
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+      });
+    }
+  </script>
 </body>
 </html>
