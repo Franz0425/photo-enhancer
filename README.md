@@ -1,17 +1,18 @@
-# AI Photo Enhancer
+# 4K Photo Enhancer
 
-A modern, elegant photo enhancer that automatically upscales images to 4K using AI (Real-ESRGAN model).
-
-## How to Use
-1. Upload your photo.
-2. Click **Enhance Photo**.
-3. Wait for processing.
-4. Download your enhanced image.
+A simple and elegant web tool to automatically enhance photos to 4K using AI (Replicate API).
 
 ## Features
-- Automatic AI upscaling
-- 4K quality output
-- Dark modern UI
+- Modern elegant black theme
+- Fully automatic enhancement
+- Works on mobile and desktop
+- Cloud AI processing
+
+## How to Use
+1. Open the site in your browser.
+2. Upload a photo.
+3. Wait for the AI to process it.
+4. Download the enhanced 4K version.
 
 ## License
-MIT License — 2025 Franz Joshua Magdapat
+MIT License © 2025 Franz Joshua Magdapat
