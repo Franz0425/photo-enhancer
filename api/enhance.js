@@ -1,45 +1,37 @@
-export default async function handler(req, res) {
-    if (req.method !== "POST") {
-        return res.status(405).json({ error: "Only POST requests allowed" });
-    }
+import Replicate from "replicate";
 
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
     const { image } = req.body;
     if (!image) {
-        return res.status(400).json({ error: "Image URL or Base64 required" });
+      return res.status(400).json({ error: "No image provided" });
     }
 
-    try {
-        const replicateResponse = await fetch("https://api.replicate.com/v1/predictions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Token ${process.env.REPLICATE_API_KEY}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                version: "nightmareai/real-esrgan:latest", // 4K upscale
-                input: { image }
-            })
-        });
+    // Make sure you set REPLICATE_API_TOKEN in your Vercel Project Settings → Environment Variables
+    const replicate = new Replicate({
+      auth: process.env.REPLICATE_API_TOKEN,
+    });
 
-        let prediction = await replicateResponse.json();
-
-        // Poll until finished
-        while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-            await new Promise(r => setTimeout(r, 3000));
-            const poll = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-                headers: { "Authorization": `Token ${process.env.REPLICATE_API_KEY}` }
-            });
-            prediction = await poll.json();
+    // Example: Using "sczhou/codeformer" for face restoration & enhancement
+    const output = await replicate.run(
+      "sczhou/codeformer:1c9b45226e3e1c5ebf2b7a61d6f094f7a6bca3f067d57f1a0ed2c6e3cf1a7c16", 
+      {
+        input: {
+          image: image,
+          upscale: 2,      // 2x upscale
+          face_upsample: true,
+          codeformer_fidelity: 0.7
         }
+      }
+    );
 
-        if (prediction.status === "succeeded") {
-            res.status(200).json({ output: prediction.output[0] });
-        } else {
-            res.status(500).json({ error: "Enhancement failed" });
-        }
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Server error" });
-    }
+    res.status(200).json({ url: output });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Enhancement failed" });
+  }
 }
