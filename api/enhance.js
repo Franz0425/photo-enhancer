@@ -1,15 +1,12 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  const { image } = req.body;
-  if (!image) {
-    return res.status(400).json({ error: "No image provided" });
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   try {
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
+    const { image } = req.body;
+
+    const startResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_KEY}`,
@@ -21,24 +18,38 @@ export default async function handler(req, res) {
       })
     });
 
-    const prediction = await response.json();
+    let prediction = await startResponse.json();
 
-    // Poll until complete
-    let status = prediction.status;
-    while (status !== "succeeded" && status !== "failed") {
+    if (prediction.error) {
+      return res.status(500).json({ error: prediction.error });
+    }
+
+    let statusMessage = "🕒 Waiting in queue...";
+    console.log(statusMessage);
+
+    // Poll until done
+    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
       await new Promise(r => setTimeout(r, 3000));
+
       const poll = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
         headers: { "Authorization": `Token ${process.env.REPLICATE_API_KEY}` }
       });
-      const pollData = await poll.json();
-      status = pollData.status;
-      if (status === "succeeded") {
-        return res.status(200).json({ url: pollData.output[0] });
-      } else if (status === "failed") {
-        return res.status(500).json({ error: "Enhancement failed" });
+
+      prediction = await poll.json();
+
+      if (prediction.status === "starting") {
+        statusMessage = "🚀 Enhancing photo...";
+      } else if (prediction.status === "processing") {
+        statusMessage = "✨ Almost done...";
+      } else if (prediction.status === "succeeded") {
+        statusMessage = "✅ Enhancement complete!";
       }
+      console.log(statusMessage);
     }
+
+    res.status(200).json(prediction);
+
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 }
